@@ -4,16 +4,20 @@ The [Airdrop contract](https://thirdweb.com/thirdweb.eth/Airdrop) is suitable to
 
 > note: token-owner must approve their tokens to this airdrop contract, by calling approval related function [approve](https://github.com/thirdweb-dev/contracts/blob/main/contracts/external-deps/openzeppelin/token/ERC20/ERC20.sol) on the token contract.
 
-## Setup client id
+## Setup credentials
 
-Before you start, you need to replace the placeholder `clientId` with your client ID to use thirdweb SDK.
+Create the `.env` file from `.env.example` if not present
 
-Refer to [Creating a client](https://portal.thirdweb.com/typescript/v5/client) guide to see how you can get a client id.
+```bash
+cp -R ./.env.example ./.env
+```
 
-Go to `src/client.ts` file and replace the placeholder `clientId` with your client ID.
+Configure value accordingly
 
-```ts
-const clientId = "......";
+```bash
+NEXT_PUBLIC_TEMPLATE_CLIENT_ID=...
+NEXT_PUBLIC_MAIN_AIRDROP_CONTRACT_ADDRESS=...
+NEXT_PUBLIC_CLAIMABLE_AIRDROP_CONTRACT_ADDRESS=...
 ```
 
 ## Usage
@@ -48,6 +52,6 @@ yarn start
 - [React components and hooks](https://portal.thirdweb.com/typescript/v5/react)
 - [thirdweb Dashboard](https://thirdweb.com/dashboard)
 
-## Join our Discord!
+## Thirdweb Discord!
 
 For any questions or suggestions, join our discord at [https://discord.gg/thirdweb](https://discord.gg/thirdweb).
