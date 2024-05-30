@@ -1,8 +1,6 @@
-# campaign-airdrop demo using thirdweb SDK + Next.js starter
+# erc20-airdrop-demo
 
-The [Airdrop contract](https://thirdweb.com/thirdweb.eth/Airdrop) is suitable to use when you want to transfer ERC20 / ERC721 / ERC1155 tokens to a list of recipient addresses, and supports push based, claim based (allowlist), and signature based airdrops.
-
-> note: token-owner must approve their tokens to this airdrop contract, by calling approval related function [approve](https://github.com/thirdweb-dev/contracts/blob/main/contracts/external-deps/openzeppelin/token/ERC20/ERC20.sol) on the token contract.
+ERC20 airdrop demos with claim based approach by reusing [thirdweb SDK + Next.js starter](https://github.com/thirdweb-example/next-starter).
 
 ## Setup credentials
 
@@ -48,9 +46,10 @@ yarn start
 
 ## Resources
 
-- [thirdweb SDK documentation](https://portal.thirdweb.com/typescript/v5)
-- [React components and hooks](https://portal.thirdweb.com/typescript/v5/react)
-- [thirdweb Dashboard](https://thirdweb.com/dashboard)
+- [thirdweb SDK documentation](https://portal.thirdweb.com/typescript/v5): performant & lightweight SDK to interact with any EVM chain from Node, React and React Native
+- [React components and hooks](https://portal.thirdweb.com/typescript/v5/react): easily connect wallets & interact with smart contracts
+- [thirdweb Dashboard](https://thirdweb.com/dashboard): manage your web3 apps
+- [Airdrop contract](https://thirdweb.com/thirdweb.eth/Airdrop) is suitable to use when you want to transfer ERC20 / ERC721 / ERC1155 tokens to a list of recipient addresses, and supports push based, claim based (allowlist), and signature based airdrops
 
 ## Thirdweb Discord!
 

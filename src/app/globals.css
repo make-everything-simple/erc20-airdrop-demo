@@ -32,3 +32,14 @@
 	align-items: center;
 	min-height: 100vh;
   }
+
+/* visited link */
+a {
+	color: aqua;
+	text-decoration: underline;
+}
+
+/* mouse over link */
+a:hover {
+	color: hotpink;
+}

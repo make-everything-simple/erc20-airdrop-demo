@@ -1,5 +1,5 @@
 {
-  "name": "campaign-airdrop",
+  "name": "erc20-airdrop-demo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
