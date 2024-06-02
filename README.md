@@ -2,6 +2,12 @@
 
 ERC20 airdrop demos with claim based approach by reusing [thirdweb SDK + Next.js starter](https://github.com/thirdweb-example/next-starter).
 
+## Prerequisites
+
+1. Register a new thirdweb account by connecting your wallet on [dashboard](https://thirdweb.com/dashboard) and then [Create an API Key](https://thirdweb.com/dashboard/settings/api-keys) like this ![popup](./arts/thirdweb-create-api-key.png)
+2. Deploy [ERC20 Max Supply contract](https://thirdweb.com/0x8AA0b6538Ba8e9DB298A7B603477e4045729b830/ERC20BaseMaxSupply): main contract to mint and airdrop token
+3. Deploy [AirdropClaimable contract](https://thirdweb.com/thirdweb.eth/Airdrop) to transfer ERC20 / ERC721 / ERC1155 tokens to a list of recipient addresses, and supports push based, claim based (allowlist), and signature based airdrops
+
 ## Setup credentials
 
 Create the `.env` file from `.env.example` if not present
@@ -10,7 +16,10 @@ Create the `.env` file from `.env.example` if not present
 cp -R ./.env.example ./.env
 ```
 
-Configure value accordingly
+Configure values accordingly which output from [prerequisites](#prerequisites)
+
+* [Retrieve API Keys](https://thirdweb.com/dashboard/settings/api-keys) like this ![api-keys](./arts/thirdweb-retrieve-api-key.png)
+* [Retrieve deployed contracts](https://thirdweb.com/dashboard/contracts/deploy) like this ![deployed contracts](./arts/thirdweb-retrieve-deployed-contracts.png)
 
 ```bash
 NEXT_PUBLIC_TEMPLATE_CLIENT_ID=...
@@ -46,11 +55,7 @@ yarn start
 
 ## Resources
 
-- [thirdweb SDK documentation](https://portal.thirdweb.com/typescript/v5): performant & lightweight SDK to interact with any EVM chain from Node, React and React Native
-- [React components and hooks](https://portal.thirdweb.com/typescript/v5/react): easily connect wallets & interact with smart contracts
-- [thirdweb Dashboard](https://thirdweb.com/dashboard): manage your web3 apps
-- [Airdrop contract](https://thirdweb.com/thirdweb.eth/Airdrop) is suitable to use when you want to transfer ERC20 / ERC721 / ERC1155 tokens to a list of recipient addresses, and supports push based, claim based (allowlist), and signature based airdrops
-
-## Thirdweb Discord!
-
-For any questions or suggestions, join our discord at [https://discord.gg/thirdweb](https://discord.gg/thirdweb).
+* [thirdweb SDK documentation](https://portal.thirdweb.com/typescript/v5): performant & lightweight SDK to interact with any EVM chain from Node, React and React Native
+* [React components and hooks](https://portal.thirdweb.com/typescript/v5/react): easily connect wallets & interact with smart contracts
+* [thirdweb Dashboard](https://thirdweb.com/dashboard): manage your web3 apps
+* [thirdweb CLI](https://portal.thirdweb.com/cli): tools to create, build, and deploy web3 applications
