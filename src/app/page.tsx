@@ -4,7 +4,7 @@ import {
   useActiveAccount, 
   useWalletBalance
 } from "thirdweb/react";
-import { getContract, sendTransaction, readContract, ThirdwebContract } from "thirdweb";
+import { getContract, sendTransaction, readContract, ThirdwebContract, sendAndConfirmTransaction } from "thirdweb";
 import { sepolia } from "thirdweb/chains";
 import { useState } from "react";
 import { 
@@ -22,20 +22,21 @@ import { client } from './client';
 import { approve } from "thirdweb/extensions/erc20";
 
 export default function Home() {
+  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
   const snapshotWhitelist = [
-    { recipient: "0x663217Fd41198bC5dB2F69313a324D0628daA9E8", amount: 10 },
-    { recipient: "0xF537D4f5DE99c10931296F40A13fd19F9ab11f79", amount: 11 },
+    { recipient: "0x663217Fd41198bC5dB2F69313a324D0628daA9E8", amount: 60 },
+    { recipient: "0x663217Fd41198bC5dB2F69313a324D0628daA9E8", amount: 61 },
     { recipient: "0x8Ec17698C55f7B2aB9dB1B61ED142bef54163bc0", amount: 12 },
     // cheat part to make the unique mekleRoot
-    { recipient: "0x8AA0b6538Ba8e9DB298A7B603477e4045729b830", amount: 1 }
+    { recipient: "0x8AA0b6538Ba8e9DB298A7B603477e4045729b830", amount: 2 }
   ];
   const totalAirdropAmount = snapshotWhitelist.reduce((accumulator, currentValue) => accumulator + currentValue.amount, 0);
   //1. Deploy main contract use for airdrop & connect to it
-  const airdropMainContractAddress = process.env.NEXT_PUBLIC_MAIN_AIRDROP_CONTRACT_ADDRESS || "";
-  const airDropContract = getContract({ 
+  const tokenContractAddress = process.env.NEXT_PUBLIC_MAIN_AIRDROP_CONTRACT_ADDRESS || "";
+  const tokenContract = getContract({ 
     client, 
     chain: sepolia, 
-    address: airdropMainContractAddress
+    address: tokenContractAddress
   });
   //2. Deploy smart contract support AirdropClaimable & connect to it
   const airdropClaimableContractAddress = process.env.NEXT_PUBLIC_CLAIMABLE_AIRDROP_CONTRACT_ADDRESS || '';
@@ -66,22 +67,34 @@ export default function Home() {
       params: [] 
     })
   }
+  // Owner address
+  const [airdropOwner, setAirdropOwner] = useState<string>(ZERO_ADDRESS);
+  const [tokenOwner, setTokenOwner] = useState<string>(ZERO_ADDRESS);
+  const fetchContractOwners = async () => {
+    if (tokenOwner == ZERO_ADDRESS) {
+      const airdropOwner = await getOwnerOfContract(tokenContract);
+      setTokenOwner(airdropOwner);
+    }
+    if (airdropOwner == ZERO_ADDRESS) {
+      const airdropClaimableOwner = await getOwnerOfContract(airdropClaimableContract);
+      setAirdropOwner(airdropClaimableOwner);
+    }
+  }
+  fetchContractOwners();
   const [isAirdropClaimableOwner, setIsAirdropClaimableOwner] = useState<boolean>(false);
   const [isAirdropOwner, setIsAirdropOwner] = useState<boolean>(false);
   const checkCurrentWalletIsOwner = async (account: Account) => {
-    const airdropOwner = await getOwnerOfContract(airDropContract);
+    await fetchContractOwners();
+    if(airdropOwner.toLowerCase() == account.address.toLowerCase()) {
+      setIsAirdropOwner(true);
+    }
     if(airdropOwner.toLowerCase() == account.address.toLowerCase()) {
       setIsAirdropClaimableOwner(true);
-    }
-
-    const airdropClaimableOwner = await getOwnerOfContract(airdropClaimableContract);
-    if(airdropClaimableOwner.toLowerCase() == account.address.toLowerCase()) {
-      setIsAirdropOwner(true);
     }
   }
   const approveAirdropClaimableContractAddress = async (account: Account) => { 
     const transaction = await approve({
-    contract: airDropContract,
+    contract: tokenContract,
     spender: airdropClaimableContractAddress,
     amount: totalAirdropAmount,
   });
@@ -96,9 +109,9 @@ export default function Home() {
   
   //4. Build MerkleTree: snapshot / allowlist of airdrop recipients and amounts
   const params: BaseTransactionOptions<GenerateMerkleTreeInfoERC20Params> = {
-    contract: airDropContract,
+    contract: tokenContract,
     snapshot: snapshotWhitelist,
-    tokenAddress: airdropMainContractAddress
+    tokenAddress: tokenContractAddress
   }
   const [merkleRoot, setMerkleRoot] = useState<string | null>(null);
   const [snapshotUri, setSnapshotUri] = useState<string | null>(null);
@@ -129,7 +142,7 @@ export default function Home() {
     chain: sepolia,
     address,
     client,
-    tokenAddress: airdropMainContractAddress,
+    tokenAddress: tokenContractAddress,
   });
   if(activeAccount) {
     checkCurrentWalletIsOwner(activeAccount);
@@ -155,7 +168,7 @@ export default function Home() {
     // Set MerkleTree
     const transaction = setMerkleRootOnContract({
       contract: airdropClaimableContract,
-      token: airdropMainContractAddress,
+      token: tokenContractAddress,
       tokenMerkleRoot: `0x${merkleRoot.replace("0x", "")}`,
       resetClaimStatus: true
     });
@@ -182,13 +195,13 @@ export default function Home() {
       // AirdropClaimable contract at step #2
       contract: airdropClaimableContract,
       // tokenAddress: must be the main smart contract address use for airdrop at step #1
-      tokenAddress: airdropMainContractAddress,
+      tokenAddress: tokenContractAddress,
       // Wallet address of receiver
       recipient,
     });
     console.log("claimTransaction = " + JSON.stringify(claimTransaction));
     // Send the transaction
-    const { transactionHash } = await sendTransaction({ transaction: claimTransaction, account });
+    const { transactionHash } = await sendAndConfirmTransaction({ transaction: claimTransaction, account });
     setClaimTransactionHash(transactionHash);
   }
 
@@ -205,19 +218,9 @@ export default function Home() {
           />
           { address && (
             <div>
-              <div style={{ 
-                  backgroundColor: "#222", 
-                  padding: "2rem",
-                  borderRadius: "1rem",
-                  textAlign: "center",
-                  minWidth: "500px",
-                  marginBottom: "2rem",
-                  marginTop: "2rem"
-                }}>
-                  <h1>
-                    <b>
+              <div className="container-primary bg-[#222]">
+                  <h1 className="text-3xl font-bold text-center">
                     L1 Airdrop claim-based approach. Recipient who is in the whitelist will pay gas fee
-                    </b>
                   </h1>
                 <div style={{ 
                   backgroundColor: "#222", 
@@ -226,43 +229,46 @@ export default function Home() {
                   textAlign: "left",
                   minWidth: "500px"
                 }}>
-                  <p style={{textAlign: "center"}}>
-                    <mark>
+                  <p className="text-2xl font-bold text-center">
                       Smart Contract: Require two following smart contracts
-                    </mark>
                   </p>
-                  <ol>
-                    <li>
-                      <a href={`https://sepolia.etherscan.io/address/${airdropMainContractAddress}`} target="_blank">
-                        Airdrop Contract: {airdropMainContractAddress}
-                      </a>
+                  <ol className="list-decimal">
+                    <li>Token Contract
                     </li>
-                    <li>
-                      <a className="underline" href={`https://sepolia.etherscan.io/address/${airdropClaimableContractAddress}`} target="_blank">
-                        AirdropClaimable Contract: {airdropClaimableContractAddress}
-                      </a>
+                    <ol className="list-decimal ml-2.5">
+                      <li>
+                        <a href={`https://sepolia.etherscan.io/address/${tokenContractAddress}`} target="_blank">
+                          Token address: {tokenContractAddress}
+                        </a>
+                      </li>
+                      <li>
+                          <a className="underline" href={`https://sepolia.etherscan.io/address/${tokenOwner}`} target="_blank">
+                          Owner: {tokenOwner}
+                          </a>
+                      </li>
+                    </ol>
+                    <li>AirdropClaimable Contract
                     </li>
+                    <ol className="list-decimal ml-2.5">
+                      <li>
+                        <a className="underline" href={`https://sepolia.etherscan.io/address/${airdropClaimableContractAddress}`} target="_blank">
+                        Token Address: {airdropClaimableContractAddress}
+                        </a>
+                      </li>
+                      <li>
+                        <a className="underline" href={`https://sepolia.etherscan.io/address/${airdropOwner}`} target="_blank">
+                        Owner: {airdropOwner}
+                        </a>
+                      </li>
+                    </ol>
                   </ol>
                 </div>
               </div>
-              <div style={{ 
-                  backgroundColor: "#404040", 
-                  padding: "2rem",
-                  borderRadius: "1rem",
-                  textAlign: "center",
-                  minWidth: "500px",
-                  marginBottom: "2rem",
-                  marginTop: "2rem"
-                }}>
-                <p style={{textAlign: "center"}}>
-                  <mark>
+              <div className="container-primary bg-[#404040]">
+                <p className="text-2xl font-bold text-center">
                   BE: Generate MerkleTree for whitelist wallets
-                  </mark>
                 </p>
-                <div style={{ 
-                  textAlign: "left",
-                  minWidth: "500px"
-                }}>
+                <div className="text-left min-w-[500px]">
                   { snapshotWhitelist && snapshotWhitelist.map((item, index) => (
                     <span key={index}>
                       {index + 1}. Address: {item.recipient} with airdrop amount: {item.amount}
@@ -270,96 +276,54 @@ export default function Home() {
                     </span>
                   ))}
                 </div>
-                <button onClick={() => generateMerkleRoot(activeAccount)} style={{ 
-                  backgroundColor: "#FFF", 
-                  color: "#333",
-                  border: "nonce",
-                  padding: "1rem",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontSize: "1rem"
-                }}>BE: Generate</button>
-                { merkleRoot && (<p>MerkleRoot Hash: {merkleRoot}</p>)}
-                { snapshotUri && (<p>Snapshot URI: {snapshotUri}</p>)}
+                <button className="btn-primary my-4" onClick={() => generateMerkleRoot(activeAccount)}>
+                  BE: Generate
+                </button>
+                <p>||</p>
+                <p>\/</p>
+                <ol className="list-decimal">
+                  { merkleRoot && (<li>MerkleRoot Hash: {merkleRoot}</li>)}
+                  { snapshotUri && (<li>Snapshot URI: {snapshotUri}</li>)}
+                </ol>
                 { isAirdropClaimableOwner && merkleRoot && snapshotUri && (
-                  <div>
-                    <p style={{textAlign: "center"}}>
-                      <mark>
-                        AirdropClaimable Contract Owner save whitelist to on-chain
-                      </mark>
+                  <div className="flex items-center flex-col my-4">
+                    <p className="text-center font-bold">
+                      AirdropClaimable Contract Owner save whitelist to on-chain
                     </p>
-                    <button onClick={ () => setMerkleRootByOwner(activeAccount, merkleRoot, snapshotUri) } style={{ 
-                      backgroundColor: "#FFF", 
-                      color: "#333",
-                      border: "nonce",
-                      padding: "1rem",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontSize: "1rem"
-                    }}>BE: whitelist wallets to airdrop</button>
+                    <button className="btn-primary my-4" onClick={ () => setMerkleRootByOwner(activeAccount, merkleRoot, snapshotUri)}>
+                      BE: save on-chain
+                    </button>
+                    <p>||</p>
+                    <p>\/</p>
                   </div>
                 )}
-                {isAirdropOwner && merkleRoot && snapshotUri && (
-                  <div style={{ 
-                    backgroundColor: "#222", 
-                    padding: "2rem",
-                    borderRadius: "1rem",
-                    textAlign: "center",
-                    minWidth: "500px",
-                    marginBottom: "1rem",
-                    marginTop: "1rem"
-                  }}>
-                    <p>
-                      <mark>
-                        Partner: Owner of Airdrop contract approve allowance to AirdropClaimable contract as Spender{totalAirdropAmount}
-                      </mark>
+                {isAirdropOwner && merkleRoot && snapshotUri ? (
+                  <div className="flex items-center flex-col my-4">
+                    <p className="text-center font-bold">
+                        Partner: Owner of Airdrop contract approve AirdropClaimable contract as Spender with allowance = {totalAirdropAmount}
                     </p>
-                    <button onClick={() => approveAirdropClaimableContractAddress(activeAccount)} style={{ 
-                      backgroundColor: "#FFF", 
-                      color: "#333",
-                      border: "nonce",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontSize: "1rem",
-                      padding: "1rem"
-                    }}>
+                    <button className="btn-primary my-4" onClick={() => approveAirdropClaimableContractAddress(activeAccount)}>
                       Partner: Approve Allowance
                     </button>
                   </div>
-                  )}
+                  ): (<div><br></br><p className="text-yellow-500 selection:bg-fuchsia-300 selection:text-fuchsia-900 font-bold">Please connect wallet is the owner of token contract to approve allowance</p></div>)}
               </div>
-              <div style={{ 
-                backgroundColor: "#66ccff", 
-                padding: "2rem",
-                borderRadius: "1rem",
-                textAlign: "center",
-                minWidth: "500px",
-                flexDirection: "column"
-              }}>
-                <p style={{color: "black"}}>
-                  <mark>
-                    FE: User connects whitelist wallet to claim
-                  </mark>
+              <div className="container-primary">
+                <p className="text-2xl font-bold text-center text-white">
+                    FE: User connects wallet to claim
                 </p>
-                <p style={{color: "black"}}>Claiming Wallet: <em>{address}</em></p>
-                <p style={{color: "black"}}>
-                  Available Claim amount: <em>{getClaimableAmountForWallet(address)}</em>
-                </p>
+                <ol className="list-decimal">
+                  <li className="text-white">Claiming Wallet: <b>{address}</b>
+                  </li>
+                  <li className="text-white">Available Claim amount: <b>{getClaimableAmountForWallet(address)}</b>
+                  </li>
+                </ol>
                   { getClaimableAmountForWallet(address) > 0 ? (
-                      <button onClick={() => { claimAirdrop(address, activeAccount) }} style={{ 
-                        backgroundColor: "#FFF", 
-                        color: "#333",
-                        border: "nonce",
-                        padding: "1rem",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        fontSize: "1rem",
-                        fontWeight: "bold"
-                      }}>
+                      <button className="btn-primary" onClick={() => { claimAirdrop(address, activeAccount) }}>
                         { claimTransactionHash ? "Claimed" : "Claim Now"}
                       </button>
                   ) :
-                    (<p style={{backgroundColor: "red"}}>Current Wallet is not available for claim. Please connect with a whitelisted wallet</p>)
+                    (<p className="text-yellow-500 selection:bg-fuchsia-300 selection:text-fuchsia-900 font-bold">Current Wallet is not available for claim. Please connect with a wallet in the whitelist</p>)
                   }
                   { claimTransactionHash && (
                     <div>

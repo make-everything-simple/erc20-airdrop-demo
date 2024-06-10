@@ -31,7 +31,19 @@
 	justify-content: center;
 	align-items: center;
 	min-height: 100vh;
-  }
+}
+
+@layer components {
+	.btn-primary {
+	  @apply p-4 bg-cyan-500 hover:bg-cyan-400 font-medium hover:font-bold text-white rounded-lg border border-white;
+	}
+}
+
+@layer components {
+	.container-primary {
+	  @apply flex items-center bg-sky-600 rounded-2xl p-2 flex-col min-w-[500px] m-4 hover:border hover:border-white;
+	}
+}
 
 /* visited link */
 a {

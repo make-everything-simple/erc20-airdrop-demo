@@ -7,6 +7,7 @@ ERC20 airdrop demos with claim based approach by reusing [thirdweb SDK + Next.js
 1. Register a new thirdweb account by connecting your wallet on [dashboard](https://thirdweb.com/dashboard) and then [Create an API Key](https://thirdweb.com/dashboard/settings/api-keys) like this ![popup](./arts/thirdweb-create-api-key.png)
 2. Deploy [ERC20 Max Supply contract](https://thirdweb.com/0x8AA0b6538Ba8e9DB298A7B603477e4045729b830/ERC20BaseMaxSupply): main contract to mint and airdrop token
 3. Deploy [AirdropClaimable contract](https://thirdweb.com/thirdweb.eth/Airdrop) to transfer ERC20 / ERC721 / ERC1155 tokens to a list of recipient addresses, and supports push based, claim based (allowlist), and signature based airdrops
+4. Wallets used for testing must have enough funds to pay the gas fee
 
 ## Setup credentials
 
