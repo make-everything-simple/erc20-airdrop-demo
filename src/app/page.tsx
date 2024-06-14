@@ -1,52 +1,61 @@
 'use client';
 import { 
-  ConnectButton, 
-  useActiveAccount, 
-  useWalletBalance
-} from "thirdweb/react";
-import { getContract, sendTransaction, readContract, ThirdwebContract, sendAndConfirmTransaction } from "thirdweb";
+  getContract, 
+  sendTransaction, 
+  readContract, 
+  ThirdwebContract, 
+  sendAndConfirmTransaction, 
+  ADDRESS_ZERO } from "thirdweb";
 import { sepolia } from "thirdweb/chains";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { 
+  ConnectButton, 
+  useActiveAccount
+} from "thirdweb/react";
 import { 
   generateMerkleTreeInfoERC20, 
   GenerateMerkleTreeInfoERC20Params,
   claimERC20,
   setMerkleRoot as setMerkleRootOnContract,
-  saveSnapshot
+  saveSnapshot,
+  isClaimed
 } from "thirdweb/extensions/airdrop";
 import { BaseTransactionOptions } from "thirdweb/transaction";
 import { Account } from "thirdweb/wallets";
-import { getContractMetadata } from "thirdweb/extensions/common"
+import { approve } from "thirdweb/extensions/erc20";
 // Internal components | services
 import { client } from './client';
-import { approve } from "thirdweb/extensions/erc20";
+import { 
+  Step, 
+  TOKEN_CONTRACT_ADDRESS, 
+  AIRDROP_CONTRACT_ADDRESS,
+  SNAPSHOT_WHITELIST
+} from './constant';
+import { ArrowStep } from "./arrowStep";
 
 export default function Home() {
-  const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-  const snapshotWhitelist = [
-    { recipient: "0x663217Fd41198bC5dB2F69313a324D0628daA9E8", amount: 60 },
-    { recipient: "0x663217Fd41198bC5dB2F69313a324D0628daA9E8", amount: 61 },
-    { recipient: "0x8Ec17698C55f7B2aB9dB1B61ED142bef54163bc0", amount: 12 },
-    // cheat part to make the unique mekleRoot
-    { recipient: "0x8AA0b6538Ba8e9DB298A7B603477e4045729b830", amount: 2 }
-  ];
+  const [snapshotWhitelist] = useState<any[]>(SNAPSHOT_WHITELIST);
   const totalAirdropAmount = snapshotWhitelist.reduce((accumulator, currentValue) => accumulator + currentValue.amount, 0);
-  //1. Deploy main contract use for airdrop & connect to it
-  const tokenContractAddress = process.env.NEXT_PUBLIC_MAIN_AIRDROP_CONTRACT_ADDRESS || "";
+  // 1. Deploy token contract use to airdrop
+  const [step, setStep] = useState<Step>(Step.DEPLOY_TOKEN_CONTRACT);
+  const tokenContractAddress = TOKEN_CONTRACT_ADDRESS;
   const tokenContract = getContract({ 
     client, 
     chain: sepolia, 
-    address: tokenContractAddress
+    address: TOKEN_CONTRACT_ADDRESS
   });
-  //2. Deploy smart contract support AirdropClaimable & connect to it
-  const airdropClaimableContractAddress = process.env.NEXT_PUBLIC_CLAIMABLE_AIRDROP_CONTRACT_ADDRESS || '';
+  // 2. Deploy Airdrop claimable smart contract
+  const airdropClaimableContractAddress = AIRDROP_CONTRACT_ADDRESS;
   const airdropClaimableContract = getContract({ 
     client, 
     chain: sepolia, 
     address: airdropClaimableContractAddress
   });
+  useEffect(() => {
+    setStep(Step.DEPLOY_AIRDROP_CONTRACT);
+  }, []);
 
-  // 3. Main contract owner approve AirdropClaimable contract as spender with amount (allowance)
+  // // 3. Check the active account permissions
   const getOwnerOfContract = async (contract: ThirdwebContract) => {
     return await readContract({ 
       contract, 
@@ -68,46 +77,54 @@ export default function Home() {
     })
   }
   // Owner address
-  const [airdropOwner, setAirdropOwner] = useState<string>(ZERO_ADDRESS);
-  const [tokenOwner, setTokenOwner] = useState<string>(ZERO_ADDRESS);
+  const [airdropOwner, setAirdropOwner] = useState<string>(ADDRESS_ZERO);
+  const [tokenOwner, setTokenOwner] = useState<string>(ADDRESS_ZERO);
   const fetchContractOwners = async () => {
-    if (tokenOwner == ZERO_ADDRESS) {
+    if (tokenOwner == ADDRESS_ZERO) {
       const airdropOwner = await getOwnerOfContract(tokenContract);
       setTokenOwner(airdropOwner);
     }
-    if (airdropOwner == ZERO_ADDRESS) {
+    if (airdropOwner == ADDRESS_ZERO) {
       const airdropClaimableOwner = await getOwnerOfContract(airdropClaimableContract);
       setAirdropOwner(airdropClaimableOwner);
     }
   }
-  fetchContractOwners();
-  const [isAirdropClaimableOwner, setIsAirdropClaimableOwner] = useState<boolean>(false);
+  // Check whether a wallet already claimed or not
+  const [isWalletClaimed, setIsWalletClaimed] = useState<boolean>(false);
+  const isRecipientClaimed = async (recipient: string, claimAmount: bigint) => {
+    const isClaimedOnChain = await isClaimed({
+      // AirdropClaimable contract at step #2
+      contract: airdropClaimableContract,
+      receiver: recipient,
+      token: tokenContractAddress,
+      tokenId: claimAmount
+    });
+    setIsWalletClaimed(isClaimedOnChain);
+  }
+  // Check the owner to enable CTAs accordingly
+  const [isTokenOwner, setIsTokenOwner] = useState<boolean>(false);
   const [isAirdropOwner, setIsAirdropOwner] = useState<boolean>(false);
   const checkCurrentWalletIsOwner = async (account: Account) => {
     await fetchContractOwners();
     if(airdropOwner.toLowerCase() == account.address.toLowerCase()) {
       setIsAirdropOwner(true);
     }
-    if(airdropOwner.toLowerCase() == account.address.toLowerCase()) {
-      setIsAirdropClaimableOwner(true);
+    if(tokenOwner.toLowerCase() == account.address.toLowerCase()) {
+      setIsTokenOwner(true);
+    }
+    if(step < Step.CHECK_ACTIVE_WALLET_PERMISSIONS) {
+      setStep(Step.CHECK_ACTIVE_WALLET_PERMISSIONS)
     }
   }
-  const approveAirdropClaimableContractAddress = async (account: Account) => { 
-    const transaction = await approve({
-    contract: tokenContract,
-    spender: airdropClaimableContractAddress,
-    amount: totalAirdropAmount,
-  });
-  // Send the transaction
-  const { transactionHash } = await sendTransaction({ 
-    transaction, 
-    account 
-  });
-  console.log('approveAirdropClaimableContractAddress txHash = ' + transactionHash);
+  // Retrieve active account
+  const activeAccount: Account | undefined = useActiveAccount();
+  const address = activeAccount?.address;
+  if(activeAccount) {
+    checkCurrentWalletIsOwner(activeAccount);
+    isRecipientClaimed(activeAccount.address, BigInt(0))
+  }
   
-}
-  
-  //4. Build MerkleTree: snapshot / allowlist of airdrop recipients and amounts
+  //4. Build MerkleTree from snapshot / allowlist
   const params: BaseTransactionOptions<GenerateMerkleTreeInfoERC20Params> = {
     contract: tokenContract,
     snapshot: snapshotWhitelist,
@@ -118,37 +135,17 @@ export default function Home() {
   const generateMerkleTree = async () => {
     return await generateMerkleTreeInfoERC20(params);
   }
-  const generateMerkleRoot = async (account: Account) => {
+  const generateMerkleRoot = async () => {
+    // Generate MerkleTree from whitelist
     const { merkleRoot, snapshotUri } = await generateMerkleTree();
+    // Save snapshot
     setSnapshotUri(snapshotUri);
+    // Save merkleRoot on AirdropClaimable from #2.
     setMerkleRoot(merkleRoot);
-    // Execute transaction setMerkleRoot on AirdropClaimable from #2.
-    // token: must be the main smart contract address use for airdrop
-    if(account) {
-      // Read the owner of AirdropClaimable contract
-      // - if the owner's wallet is connected. 
-      //   - trigger the setMerkleTree. as BE will trigger on-demand
-      // - else
-      //   - skip it
-      const metadata = await getContractMetadata({ contract: airdropClaimableContract });
-      console.log('--> currencyMetadata = ' + JSON.stringify(metadata));
-    }
-  }
-  //5. Fetch the active account to get the active wallet address
-  const activeAccount: Account | undefined = useActiveAccount();
-  const address = activeAccount?.address;
-  //5.1 Get token balance of a specific address
-  const { data } = useWalletBalance({
-    chain: sepolia,
-    address,
-    client,
-    tokenAddress: tokenContractAddress,
-  });
-  if(activeAccount) {
-    checkCurrentWalletIsOwner(activeAccount);
+    setStep(Step.GENERATE_MERKLE_TREE);
   }
 
-  // 6. BE whitelist the wallets to allow claim on behalf of contract's owner
+  // 5. Airdrop contract owner store whitelist to on-chain
   const setMerkleRootByOwner = async (
     activeAccount: Account, 
     merkleRoot: string,
@@ -177,9 +174,27 @@ export default function Home() {
       transaction: transaction, 
       account: activeAccount 
     });
+    setStep(Step.AIRDROP_OWNER_SAVE_WHITELIST_ON_CHAIN);
   }
 
-  //7. Execute claimERC20 on AirdropClaimable contract
+  // 6. Token contract owner approve AirdropClaimable contract as spender with amount (allowance)
+  const [approveTransactionHash, setApproveTransactionHash] = useState<string | null>(null);
+  const approveAirdropClaimableContractAddress = async (account: Account) => { 
+    const transaction = await approve({
+      contract: tokenContract,
+      spender: airdropClaimableContractAddress,
+      amount: totalAirdropAmount,
+    });
+    // Send the transaction
+    const { transactionHash } = await sendTransaction({ 
+      transaction, 
+      account 
+    });
+    setApproveTransactionHash(transactionHash);
+    setStep(Step.TOKEN_OWNER_APPROVE_ALLOWANCE);
+  }
+
+  // 7. End users trigger claimERC20 on AirdropClaimable contract to claim
   const getClaimableAmountForWallet = (walletAddress: string) => {
     const items = snapshotWhitelist.filter(item => item.recipient.toLowerCase() === walletAddress.toLowerCase());
     if(items.length) {
@@ -189,8 +204,6 @@ export default function Home() {
   }
   const [claimTransactionHash, setClaimTransactionHash] = useState<string | null>(null);
   const claimAirdrop = async (recipient: string, account: Account) => {
-    console.log('-> recipient = ' + recipient + " account.walletAddress = " + account.address);
-    
     const claimTransaction = claimERC20({
       // AirdropClaimable contract at step #2
       contract: airdropClaimableContract,
@@ -199,16 +212,21 @@ export default function Home() {
       // Wallet address of receiver
       recipient,
     });
-    console.log("claimTransaction = " + JSON.stringify(claimTransaction));
     // Send the transaction
+    console.log('claimTransaction = ' + JSON.stringify(claimTransaction));
+    
     const { transactionHash } = await sendAndConfirmTransaction({ transaction: claimTransaction, account });
     setClaimTransactionHash(transactionHash);
+    setStep(Step.CLAIM_BY_A_WHITELIST_WALLET);
   }
 
   // Render Layout
   return (
-    <main className="p-4 pb-10 min-h-[100vh] flex items-center justify-center container max-w-screen-lg mx-auto">
+    <main className="main-container">
       <div className="container">
+          <h1 className="my-5">
+            L1 Airdrop claim-based approach. Recipient who is in the whitelist will pay gas fee
+          </h1>
           <ConnectButton
             client={client}
             appMetadata={{
@@ -218,19 +236,9 @@ export default function Home() {
           />
           { address && (
             <div>
-              <div className="container-primary bg-[#222]">
-                  <h1 className="text-3xl font-bold text-center">
-                    L1 Airdrop claim-based approach. Recipient who is in the whitelist will pay gas fee
-                  </h1>
-                <div style={{ 
-                  backgroundColor: "#222", 
-                  padding: "1rem",
-                  borderRadius: "1rem",
-                  textAlign: "left",
-                  minWidth: "500px"
-                }}>
-                  <p className="text-2xl font-bold text-center">
-                      Smart Contract: Require two following smart contracts
+              <div className="primary-container bg-[#222]">
+                  <p className="header-p">
+                      Smart Contract: Require two following contracts
                   </p>
                   <ol className="list-decimal">
                     <li>Token Contract
@@ -262,10 +270,9 @@ export default function Home() {
                       </li>
                     </ol>
                   </ol>
-                </div>
               </div>
-              <div className="container-primary bg-[#404040]">
-                <p className="text-2xl font-bold text-center">
+              <div className="primary-container bg-[#404040]">
+                <p className="header-p">
                   BE: Generate MerkleTree for whitelist wallets
                 </p>
                 <div className="text-left min-w-[500px]">
@@ -276,40 +283,75 @@ export default function Home() {
                     </span>
                   ))}
                 </div>
-                <button className="btn-primary my-4" onClick={() => generateMerkleRoot(activeAccount)}>
-                  BE: Generate
-                </button>
-                <p>||</p>
-                <p>\/</p>
-                <ol className="list-decimal">
-                  { merkleRoot && (<li>MerkleRoot Hash: {merkleRoot}</li>)}
-                  { snapshotUri && (<li>Snapshot URI: {snapshotUri}</li>)}
+                { isAirdropOwner && (
+                  <button 
+                    className="btn-primary my-4"
+                    onClick={() => generateMerkleRoot()}>
+                      BE: Generate
+                  </button>)
+                }
+                <ol className="list-decimal ml-4">
+                  { merkleRoot && (
+                    <li>MerkleRoot Hash: {merkleRoot}</li>
+                  )}
+                  { snapshotUri && (
+                    <li>Snapshot URI: {snapshotUri}
+                    </li>
+                  )}
                 </ol>
-                { isAirdropClaimableOwner && merkleRoot && snapshotUri && (
-                  <div className="flex items-center flex-col my-4">
-                    <p className="text-center font-bold">
-                      AirdropClaimable Contract Owner save whitelist to on-chain
-                    </p>
-                    <button className="btn-primary my-4" onClick={ () => setMerkleRootByOwner(activeAccount, merkleRoot, snapshotUri)}>
-                      BE: save on-chain
-                    </button>
-                    <p>||</p>
-                    <p>\/</p>
-                  </div>
-                )}
-                {isAirdropOwner && merkleRoot && snapshotUri ? (
-                  <div className="flex items-center flex-col my-4">
-                    <p className="text-center font-bold">
-                        Partner: Owner of Airdrop contract approve AirdropClaimable contract as Spender with allowance = {totalAirdropAmount}
+                { step == Step.GENERATE_MERKLE_TREE && isAirdropOwner ? 
+                <> 
+                  <ArrowStep from="generate merkle tree" to="save merkle tree on-chain">
+                    <p>Airdrop owner</p>
+                  </ArrowStep>
+                  { merkleRoot && snapshotUri && (
+                    <div className="sub-container">
+                      <p className="header-p-l2">
+                        AirdropClaimable Contract Owner save whitelist to on-chain
+                      </p>
+                      <button className="btn-primary my-4" onClick={ () => setMerkleRootByOwner(activeAccount, merkleRoot, snapshotUri)}>
+                        BE: save on-chain
+                      </button>
+                      { step == Step.AIRDROP_OWNER_SAVE_WHITELIST_ON_CHAIN &&(
+                        <ArrowStep from="save merkle tree on-chain" to="approve allowance">
+                          <p>Token owner</p>
+                        </ArrowStep>
+                      )}
+                    </div>
+                  )}
+                </>
+                :
+                <>
+                { step == Step.GENERATE_MERKLE_TREE ?
+                (<p className="warning-p">
+                  Please connect wallet is the owner of airdrop contract to save whitelist to on-chain
+                 </p>) : null
+                }
+                </>
+                }
+                { step == Step.AIRDROP_OWNER_SAVE_WHITELIST_ON_CHAIN ?
+                <>
+                {isTokenOwner && merkleRoot && snapshotUri ? (
+                  <div className="sub-container">
+                    <p className="header-p-l2">
+                        Partner: Owner of Token contract approve Airdrop contract as Spender with allowance = {totalAirdropAmount}
                     </p>
                     <button className="btn-primary my-4" onClick={() => approveAirdropClaimableContractAddress(activeAccount)}>
                       Partner: Approve Allowance
                     </button>
                   </div>
-                  ): (<div><br></br><p className="text-yellow-500 selection:bg-fuchsia-300 selection:text-fuchsia-900 font-bold">Please connect wallet is the owner of token contract to approve allowance</p></div>)}
+                  ) : (<div><p className="warning-p my-4">Please connect wallet is the owner of token contract to approve allowance</p></div>)
+                }
+                </> : null 
+                }
+                { step == Step.TOKEN_OWNER_APPROVE_ALLOWANCE &&
+                  (<ArrowStep from="approve allowance" to="claim on-chain">
+                    <p>Wallet in whitelist </p>
+                  </ArrowStep>)
+                }
               </div>
-              <div className="container-primary">
-                <p className="text-2xl font-bold text-center text-white">
+              <div className="primary-container">
+                <p className="header-p">
                     FE: User connects wallet to claim
                 </p>
                 <ol className="list-decimal">
@@ -319,18 +361,18 @@ export default function Home() {
                   </li>
                 </ol>
                   { getClaimableAmountForWallet(address) > 0 ? (
-                      <button className="btn-primary" onClick={() => { claimAirdrop(address, activeAccount) }}>
-                        { claimTransactionHash ? "Claimed" : "Claim Now"}
+                      <button className={isWalletClaimed ? "btn-disable" : "btn-primary"} onClick={() => { claimAirdrop(address, activeAccount) }} disabled={isWalletClaimed}>
+                        { isWalletClaimed ? "Claimed" : "Claim Now"}
                       </button>
                   ) :
-                    (<p className="text-yellow-500 selection:bg-fuchsia-300 selection:text-fuchsia-900 font-bold">Current Wallet is not available for claim. Please connect with a wallet in the whitelist</p>)
+                    (<p className="warning-p">Current Wallet is not available for claim. Please connect with a wallet in the whitelist</p>)
                   }
                   { claimTransactionHash && (
-                    <div>
+                    <>
                       <a className="underline" href={`https://sepolia.etherscan.io/tx/${claimTransactionHash}`} target="_blank">
                       transactionHash: {claimTransactionHash}
                       </a>
-                    </div>
+                    </>
                   )}
               </div>
             </div>
